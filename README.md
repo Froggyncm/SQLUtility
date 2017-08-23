@@ -1,2 +1,4 @@
 # SQLUtility
-This contains basic SQL utility scripts to get basic database data
+This repository contains basic SQL utility scripts
+These are all written using SQL 2012 and higher
+
