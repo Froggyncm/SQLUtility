@@ -1,0 +1,5 @@
+Use <database>;
+GO
+
+SELECT 'This is a test' + <columnName> 
+FROM <schema>.<table>
