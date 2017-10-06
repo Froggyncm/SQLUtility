@@ -824,6 +824,8 @@ ADD RowStartDate	DATETIME2	GENERATED ALWAYS AS ROW START	HIDDEN	CONSTRAINT DF_Te
 PERIOD FOR SYSTEM_TIME(RowStartDate,RowEndDate);
 GO
 
+
+
 /*QUERYING TEMPORAL TABLES*/
 /*When querying system versioned tables, there is a clause FOR SYSTEM_TIME that goes after your table select
 that will include data from the history table in your query.  If left off this will query the temporal table
