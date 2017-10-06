@@ -657,3 +657,106 @@ FROM Sales.Orders;
 GO
 REVERT;
 GO
+
+/********************************************************************************************/
+/*Add Multiple Filter and Blocks to single table using one security predicate*/
+/*****************************************************************************************/
+
+ALTER SECURITY POLICY Sec.SimpleSalesPersonAccess
+ADD BLOCK PREDICATE Sec.SimpleOrderAccess(SalesPersonPersonID) ON Sales.Invoices AFTER INSERT;
+GO
+
+ALTER SECURITY POLICY Sec.SimpleSalesPersonAccess
+ADD BLOCK PREDICATE Sec.SimpleOrderAccess(SalesPersonPersonID) ON Sales.Invoices AFTER UPDATE;
+GO
+
+ALTER SECURITY POLICY Sec.SimpleSalesPersonAccess
+ADD BLOCK PREDICATE Sec.SimpleOrderAccess(SalesPersonPersonID) ON Sales.Invoices BEFORE UPDATE;
+GO
+
+ALTER SECURITY POLICY Sec.SimpleSalesPersonAccess
+ADD BLOCK PREDICATE Sec.SimpleOrderAccess(SalesPersonPersonID) ON Sales.Invoices BEFORE DELETE;
+GO
+
+/*DROP Predicates from table for next section*/
+
+ALTER SECURITY POLICY Sec.SimpleSalesPersonAccess
+DROP FILTER PREDICATE ON Sales.Invoices
+
+ALTER SECURITY POLICY Sec.SimpleSalesPersonAccess
+DROP BLOCK PREDICATE ON Sales.Invoices AFTER INSERT;
+GO
+
+ALTER SECURITY POLICY Sec.SimpleSalesPersonAccess
+DROP BLOCK PREDICATE ON Sales.Invoices AFTER UPDATE;
+GO
+
+ALTER SECURITY POLICY Sec.SimpleSalesPersonAccess
+DROP BLOCK PREDICATE ON Sales.Invoices BEFORE UPDATE;
+GO
+
+ALTER SECURITY POLICY Sec.SimpleSalesPersonAccess
+DROP BLOCK PREDICATE ON Sales.Invoices BEFORE DELETE;
+GO
+
+
+/*********************************************************************************/
+/*Add Mulitple Filter and Block predicates to same table*/
+/********************************************************************************/
+
+/*Create new Security function */
+CREATE FUNCTION sec.SecondSecFunction 
+(@SalesPersonPersonID AS INT)
+RETURNS TABLE 
+WITH SCHEMABINDING
+AS
+RETURN SELECT 1 AS AccessRight
+	WHERE @SalesPersonPersonID = (CASE WHEN USER_NAME() = ('Salesperson2') THEN 2  -- these 3 cases will grant access to only those rows that have the specified OrgID
+						 WHEN USER_NAME() = ('Salesperson3') THEN 3
+						 WHEN USER_NAME() = ('Salesperson6') THEN 6
+						 END)
+						OR USER_NAME() = 'Salespersonall'
+						OR USER_NAME() = 'dbo';
+GO
+
+/*Add both functions to table, on for filter and one for block
+You can add multiple predicates on the same table but only one per type of predicate*/
+ALTER SECURITY POLICY Sec.SimpleSalesPersonAccess
+ADD FILTER PREDICATE Sec.SimpleOrderAccess(SalesPersonPersonID) ON Sales.Invoices;
+GO
+
+ALTER SECURITY POLICY Sec.SimpleSalesPersonAccess
+ADD BLOCK PREDICATE Sec.SecondSecFunction(SalesPersonPersonID) ON Sales.Invoices AFTER INSERT;
+GO
+
+ALTER SECURITY POLICY Sec.SimpleSalesPersonAccess
+ADD BLOCK PREDICATE Sec.SecondSecFunction(SalesPersonPersonID) ON Sales.Invoices AFTER UPDATE;
+GO
+
+SELECT *
+FROM sys.security_policies
+
+SELECT *
+FROM sys.security_predicates
+
+
+/*********************************************************************/
+/*Create second policy to apply different security predicate to table*/
+/***********************************************************************/
+
+/*Will Fail as you can only have one security predicate (by type) on a table)*/
+CREATE SECURITY POLICY Sec.SecondPolicy
+ADD BLOCK PREDICATE Sec.SecondSecFunction(SalesPersonPersonID) ON Sales.Invoices BEFORE DELETE
+WITH (STATE = ON);
+
+ALTER SECURITY POLICY Sec.SecondPolicy
+ADD FILTER PREDICATE Sec.SecondSecFunction(SalesPersonPersonID) ON Sales.Invoices;
+GO
+
+
+SELECT *
+FROM sys.security_policies
+
+SELECT o.name AS TableName, o.type_desc, p.predicate_definition, p.predicate_type, P.predicate_type_desc, p.operation, p.operation_desc
+FROM sys.security_predicates p INNER JOIN sys.objects o ON o.object_id = p.target_object_id
+
