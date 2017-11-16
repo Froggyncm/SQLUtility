@@ -75,7 +75,7 @@ GO
 
 
  /************************************************************************************************************/
- /*How Temporal tables work by the book*/
+ /*How Temporal tables work by the book or using the Wrath of Khan methodology*/
  /************************************************************************************************************/
 
  /*With SYSTEM VERSION ON Cannot insert a record with explictly set rowstartdate and/or rowenddate for the temporal
@@ -108,6 +108,33 @@ GO
 SELECT DepartmentID,DepartmentName,ManagerID,RowStartDate,RowEndDate		
 FROM HumanResources.Department;
 GO
+
+--Insert new record into table 
+INSERT INTO HumanResources.Department
+(DepartmentName,ManagerID,RowStartDate)
+VALUES
+('Paint Shop',2,DEFAULT);
+GO
+
+--SELECT record
+SELECT *
+FROM HumanResources.Department
+WHERE DepartmentName = 'Paint Shop';
+GO
+
+--Update record with exact same data
+UPDATE HumanResources.Department
+SET DepartmentName = 'Paint Shop'
+WHERE DepartmentID = 6;
+GO
+
+--Temporal tables see this as an update even though the data did not change
+SELECT *
+FROM HumanResources.Department
+FOR SYSTEM_TIME ALL
+WHERE DepartmentID = 6;
+GO
+
 
 --existing record moved to history
 SELECT *
@@ -683,13 +710,14 @@ SELECT SupplierID,SupplierName,SupplierCategoryID,PrimaryContactPersonID,Alterna
 FROM WideWorldImporters.Purchasing.Suppliers;
 GO
 
+
 SELECT *
 FROM Purchasing.Vendor
 
 ALTER TABLE Purchasing.Vendor
 ADD VersionStart	DATETIME2	GENERATED ALWAYS AS ROW START	HIDDEN	CONSTRAINT DF_Vendor_Start	DEFAULT SYSUTCDATETIME()	NOT NULL,
 	VersionEnd		DATETIME2   GENERATED ALWAYS AS ROW END		HIDDEN  CONSTRAINT DF_Vendor_End		DEFAULT CONVERT( DATETIME2, '9999-12-31 23:59:59.9999999') NOT NULL,
-PERIOD FOR SYSTEM_TIME(VersionStart,VersionEnd);
+PERIOD FOR SYSTEM_TIME(VersionStart,VersionEnd)
 GO
 
 ALTER TABLE Purchasing.Vendor
@@ -824,8 +852,6 @@ ADD RowStartDate	DATETIME2	GENERATED ALWAYS AS ROW START	HIDDEN	CONSTRAINT DF_Te
 PERIOD FOR SYSTEM_TIME(RowStartDate,RowEndDate);
 GO
 
-
-
 /*QUERYING TEMPORAL TABLES*/
 /*When querying system versioned tables, there is a clause FOR SYSTEM_TIME that goes after your table select
 that will include data from the history table in your query.  If left off this will query the temporal table
@@ -877,5 +903,22 @@ SELECT *
 FROM HumanResources.Department
 FOR SYSTEM_TIME CONTAINED IN ('2005-01-01','2017-09-06 20:55:59.9411652';)
 
+/****************************************************************************************************************************/
+/*Performance Testing - TEMPORAL TABLES ONLY*/
+/****************************************************************************************************************************/
 
+/*Two temporal tables, both with history
+FK
+Indexes
+TTSampleUser has 50 rows
+TTSampleData has 4999999 rows*/
+
+USE TemporalTest;
+GO
+
+/*run temporal query on table with 4999999 rows with Show Execution Plan ON*/
+SELECT *
+FROM PerfTest.TTSampleData
+FOR SYSTEM_TIME ALL;
+GO
 
