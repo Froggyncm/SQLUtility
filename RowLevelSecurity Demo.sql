@@ -4,20 +4,22 @@ It uses security predicates that can be used to filter out rows for select statm
 and explicitly block write operations
 MUST RUN RowLevelSecurity-PrepforDemo.sql script first*/
 
-USE RowLevelSecurity;
+USE RLSecurity;
 GO
 
 /*Check for existing security policies or predicates*/
 SELECT *
-FROM sys.security_policies
+FROM sys.security_policies;
+GO
 
 SELECT *
-FROM sys.security_predicates
+FROM sys.security_predicates;
+GO
 
 SELECT pol.[name], pol.is_enabled, pre.predicate_definition, pre.predicate_type_desc, pre.operation_desc, o.[name] AS TableAppliedTo
 FROM sys.security_policies pol INNER JOIN sys.security_predicates pre ON pre.object_id = pol.object_id
-INNER JOIN sys.objects o ON o.object_id = pre.target_object_id
-
+INNER JOIN sys.objects o ON o.object_id = pre.target_object_id;
+GO
 
 /**************
 Use two tables Orders and Invoices with FK between*/
@@ -114,7 +116,7 @@ GO
 /*************************************************************************************/
 CREATE SECURITY POLICY Sec.SimpleSalesPersonAccess											--Descriptive name is best
 ADD FILTER PREDICATE Sec.SimpleOrderAccess(SalesPersonPersonID) ON Sales.Orders				--use variable in funciton to apply to column in table to grant access
-WITH (STATE = ON);																			--Policy is on and in effect
+WITH (STATE = ON);																		--Policy is on and in effect
 
 /*****************Test access**********************************************/
 
@@ -270,8 +272,8 @@ They are set in the BEFORE and AFTER context
 
 /*ALTER the security policy to block inserts to rows you cannot view*/
 ALTER SECURITY POLICY Sec.SimpleSalesPersonAccess
- ADD BLOCK PREDICATE Sec.SimpleOrderAccess(SalespersonPersonID)
-					ON Sales.Orders AFTER INSERT
+ADD BLOCK PREDICATE Sec.SimpleOrderAccess(SalespersonPersonID)
+ON Sales.Orders AFTER INSERT
 
  /*user SalesPerson2 now cannot insert a record for SalesPersonPersonID = 3 */
 EXECUTE AS USER = 'SalesPerson2';
@@ -314,7 +316,7 @@ RETURN SELECT 1 AS AccessRight
 					  --These two rows grant access to all;
 GO
 
-/*DROP the security policy*/
+/*DROP the security policy, this can be done even if policy is on */
 DROP SECURITY POLICY Sec.SimpleSalesPersonAccess   --Policy is ON and has predicates applied to it
 
 /*Sysadmin access*/
@@ -471,9 +473,6 @@ All done while the policy was ON*/
 ALTER SECURITY POLICY Sec.SimpleSalesPersonAccess
 ADD FILTER PREDICATE Sec.SimpleOrderAccess(SalesPersonPersonID) ON Sales.Orders;
 GO
-
-
-
 
 /*************************************************************************************/
 /*Query second table joined to table with security predicate applied*/
@@ -810,7 +809,7 @@ GO
 
 /*********************************************************************************/
 /*Cannot create Policy or Predicate in another database*/
-USE TDETest;
+USE Demo1;
 GO
 
 CREATE FUNCTION dbo.SecondDatabase
@@ -827,17 +826,17 @@ RETURN SELECT 1 AS AccessRight
 						OR USER_NAME() = 'dbo';
 GO
 
-USE RowLevelSecurity;
+USE RLSecurity;
 GO
 
 /*Cannot apply Predicate in one database to security policy in different database*/
 CREATE SECURITY POLICY Sec.SecondPolicy
-ADD BLOCK PREDICATE TDETest.dbo.SecondDatabase(SalesPersonPersonID) ON Sales.Orders 
+ADD BLOCK PREDICATE Demo1.dbo.SecondDatabase(SalesPersonPersonID) ON Sales.Orders 
 WITH (STATE = ON);
 GO
 
 /*Cannot create policy in one database and applied table is in another database*/
-USE TDETest;
+USE Demo1;
 GO
 
 CREATE SECURITY POLICY dbo.SecondPolicy
@@ -846,10 +845,11 @@ WITH (STATE = ON);
 GO
 
 
+
 /***************************************************************************************************************************************/
 /*How Security is applied and the overhead cost*/
 /**************************************************************************************************************************************/
-USE RowLevelSecurity;
+USE RLSecurity;
 GO
 
 /*Created Sample tables with 50 users and table with 5 million rows*/
@@ -902,36 +902,9 @@ GO
 ALTER ROLE db_datareader ADD MEMBER User10;
 GO
 
-/*Run queries while SQL Trace is running
-and run a second time with Showplan.*/
-
--- run using test_sa account
--- query 1
-SELECT * FROM Sales.SampleData d
- INNER JOIN Sales.SampleUser u on d.UserID=u.UserID
- WHERE u.Username = 'User10'
-GO
-
--- query 2
-SELECT * FROM Sales.SampleData d
- WHERE CreateDate > '2016-02-03 19:59:47.560'
-
--- run using User10 account
--- query 3
-SELECT * FROM Sales.SampleData d
- INNER JOIN Sales.SampleUser u on d.UserID=u.UserID
- WHERE u.Username = u.Username
-GO
-
--- query 4
-SELECT * FROM Sales.SampleData d 
- INNER JOIN Sales.SampleUser u on d.UserID=u.UserID
- WHERE u.Username = CURRENT_USER 
-   AND CreateDate > '2016-02-03 19:59:47.560'
-GO
 
 /*Login as sysadmin and implement RLS on the table SampleData*/
-USE RowLevelSecurity;
+USE RLSecurity;
 GO
 
 CREATE FUNCTION dbo.fn_securitypredicateUser (@UserID int)
@@ -950,50 +923,22 @@ ON Sales.SampleData
 WITH (STATE = ON);
 GO
 
-/*Login in as Test_sa and User10 to run queries again with
-SQL trace on and then again with Showplan
-Use SQLSENTRY Plan Explorer - Free Download */
 
+/*Run with sa account*/
 
--- run using test_sa account
--- query 1
-SELECT * FROM Sales.SampleData d
- INNER JOIN Sales.SampleUser u on d.UserID=u.UserID
- WHERE u.Username = 'User10'
+SELECT *
+FROM Sales.SampleData;
 GO
 
--- query 2
-SELECT * FROM Sales.SampleData d
- WHERE CreateDate > '2016-02-03 19:59:47.560'
-
--- run using User10 account
--- query 3
-SELECT * FROM Sales.SampleData d
- INNER JOIN Sales.SampleUser u on d.UserID=u.UserID
- WHERE u.Username = u.Username
+/*Login as user10*/
+USE RLSecurity;
 GO
 
--- query 4
-SELECT * FROM Sales.SampleData d 
- INNER JOIN Sales.SampleUser u on d.UserID=u.UserID
- WHERE u.Username = CURRENT_USER 
-   AND CreateDate > '2016-02-03 19:59:47.560'
+SELECT *
+FROM Sales.SampleData;
 GO
 
-
-/*Compare runtime results between the two traces*/
-
-USE master;
-GO
-
-SELECT RowNumber, TextData, LoginName, Duration AS NORLS, StartTime,EndTime
-FROM dbo.TraceBeforeRLS
-WHERE RowNumber IN (173,177, 718,722)
-ORDER BY LoginName;
-GO
-
-SELECT RowNumber, TextData, LoginName, Duration AS WithRLS, StartTime,EndTime
-FROM dbo.TraceAfterRLS
-WHERE RowNumber IN (126,131,309,313)
-ORDER BY LoginName;
+SELECT 1/(FloatColumn-517.89)
+FROM Sales.SampleData
+WHERE UserID = 3 
 GO
